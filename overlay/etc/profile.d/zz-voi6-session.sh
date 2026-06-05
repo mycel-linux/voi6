@@ -10,6 +10,8 @@ case "$(tty 2>/dev/null)" in
         # Only from a real logind session, and not if a compositor is already up.
         [ -n "${WAYLAND_DISPLAY:-}" ] && return
         [ -z "${XDG_SESSION_ID:-}" ] && return
+        # No compositor installed? Stay at the shell instead of exec-fail looping.
+        command -v cage >/dev/null 2>&1 || return
         export XDG_SESSION_TYPE=wayland
         export WLR_RENDERER=pixman           # no GL driver in the VM; software render
         export WLR_NO_HARDWARE_CURSORS=1     # QEMU virtio-gpu has no HW cursor

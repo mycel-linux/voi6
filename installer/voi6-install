@@ -1,0 +1,309 @@
+#!/bin/bash
+# voi6-install — the Voi6 installer.
+#
+# Two layers in one file:
+#   * ENGINE  — non-interactive: partition a disk, xbps the base into /mnt, weave
+#               the s6 service layer with mycel-compose, install GRUB, make users.
+#   * TUI     — a small dialog front-end (Quick install / Advanced) that just
+#               collects answers and calls the engine.
+#
+# Runs from the live Voi6 environment. Installer assets (mycel-compose + the
+# service/skel/overlay definitions) live under /usr/share/voi6, placed there by
+# bootstrap.sh; this keeps the installer using the SAME declarations as the build.
+#
+# Usage:
+#   voi6-install                 # TUI
+#   voi6-install --quick /dev/vdb [--de cage|none|plasma|gnome]   # unattended
+set -euo pipefail
+
+# ── Config (overridable by env or the TUI) ────────────────────────────────────
+DISK="${DISK:-}"
+FS="${FS:-ext4}"
+HOSTNAME_="${HOSTNAME_:-voi6}"
+USERNAME="${USERNAME:-voi}"
+USERPASS="${USERPASS:-voi}"
+ROOTPASS="${ROOTPASS:-voi}"
+TIMEZONE="${TIMEZONE:-UTC}"
+LOCALE="${LOCALE:-en_US.UTF-8}"
+DE="${DE:-cage}"                       # none | cage | plasma | gnome
+REPO="${REPO:-https://repo-default.voidlinux.org/current}"
+TARGET=/mnt
+ASSETS="${VOI6_ASSETS:-/usr/share/voi6}"
+COMPOSE="${VOI6_COMPOSE:-/usr/bin/mycel-compose}"
+
+# s6 supervision suite + the rest of the Voi6 base. base-system pulls runit; we
+# tear it out and install s6 instead (same swap as bootstrap.sh).
+S6_PKGS=(skalibs execline s6 s6-rc s6-linux-init)
+BASE_EXTRA=(elogind dbus dhcpcd eudev grub dialog)
+
+BLUE='\033[0;34m'; GREEN='\033[0;32m'; RED='\033[0;31m'; NC='\033[0m'
+step() { echo -e "\n${BLUE}::${NC} $1"; }
+ok()   { echo -e "   ${GREEN}ok${NC} $1"; }
+die()  { echo -e "   ${RED}!!${NC} $1" >&2; exit 1; }
+
+# Partition node name: /dev/vdb -> /dev/vdb1 ; /dev/nvme0n1 -> /dev/nvme0n1p1
+partdev() { case "$1" in *[0-9]) echo "$1p$2" ;; *) echo "$1$2" ;; esac; }
+
+firmware() { [ -d /sys/firmware/efi/efivars ] && echo uefi || echo bios; }
+
+# ── Engine ────────────────────────────────────────────────────────────────────
+
+partition_disk() {
+    step "partitioning $DISK ($(firmware))..."
+    wipefs -aq "$DISK" 2>/dev/null || true
+    if [ "$(firmware)" = uefi ]; then
+        # GPT: 512M ESP + rest root
+        sfdisk -q "$DISK" <<-EOF
+		label: gpt
+		,512M,C12A7328-F81F-11D2-BA4B-00A0C93EC93B
+		,,L
+		EOF
+        ESP=$(partdev "$DISK" 1); ROOT=$(partdev "$DISK" 2)
+    else
+        # GPT for BIOS: 1M BIOS-boot (GRUB core) + rest root
+        sfdisk -q "$DISK" <<-EOF
+		label: gpt
+		,1M,21686148-6449-6E6F-744E-656564454649
+		,,L
+		EOF
+        ESP=""; ROOT=$(partdev "$DISK" 2)
+    fi
+    udevadm settle 2>/dev/null || true
+    ok "ESP=${ESP:-none} root=$ROOT"
+}
+
+format_and_mount() {
+    step "formatting + mounting..."
+    # For ext*, disable features GRUB 2.12's reader chokes on (e2fsprogs 1.47
+    # enables orphan_file / metadata_csum_seed by default) — otherwise GRUB can't
+    # read /boot/grub/grub.cfg and drops to the rescue shell.
+    case "$FS" in
+        ext*) "mkfs.${FS}" -qF -O '^orphan_file,^metadata_csum_seed' "$ROOT" ;;
+        *)    "mkfs.${FS}" -qF "$ROOT" ;;
+    esac
+    mount "$ROOT" "$TARGET"
+    if [ -n "${ESP:-}" ]; then
+        mkfs.vfat -F32 "$ESP" >/dev/null
+        mkdir -p "$TARGET/boot/efi"
+        mount "$ESP" "$TARGET/boot/efi"
+    fi
+    ok "root on $ROOT ($FS)"
+}
+
+install_base() {
+    step "installing base system into $TARGET (network)..."
+    mkdir -p "$TARGET/var/db/xbps/keys"
+    cp -a /var/db/xbps/keys/* "$TARGET/var/db/xbps/keys/" 2>/dev/null || true
+
+    # The Void base, then swap runit -> s6 (base-system hard-pins runit-void,
+    # which conflicts with s6-linux-init — exactly the bootstrap dance).
+    XBPS_ARCH=x86_64 xbps-install -Sy -R "$REPO" -r "$TARGET" base-system \
+        || die "base-system install failed"
+    xbps-remove -y -r "$TARGET" base-system runit-void \
+        || die "could not remove runit-void"
+    XBPS_ARCH=x86_64 xbps-install -Sy -R "$REPO" -r "$TARGET" \
+        "${S6_PKGS[@]}" "${BASE_EXTRA[@]}" \
+        || die "s6 + base extras install failed"
+    ok "base installed"
+}
+
+bind_pseudo() {
+    mount --rbind /proc "$TARGET/proc"
+    mount --rbind /sys  "$TARGET/sys"
+    mount --rbind /dev  "$TARGET/dev"
+    cp -L /etc/resolv.conf "$TARGET/etc/resolv.conf" 2>/dev/null || true
+}
+unbind_pseudo() {
+    umount -lR "$TARGET/dev" "$TARGET/sys" "$TARGET/proc" 2>/dev/null || true
+}
+
+weave_s6() {
+    step "weaving the s6 service layer with mycel-compose..."
+    [ -x "$COMPOSE" ] || die "mycel-compose not found at $COMPOSE"
+    mkdir -p "$TARGET/etc/s6-rc"
+    "$COMPOSE" --services "$ASSETS/services" --out "$TARGET/etc/s6-rc/source" \
+        || die "mycel-compose failed"
+    chroot "$TARGET" s6-rc-compile /etc/s6-rc/compiled /etc/s6-rc/source \
+        || die "s6-rc-compile failed"
+
+    # s6-linux-init as PID 1 (Void ships no skel; restore ours).
+    rm -rf "$TARGET/etc/s6-linux-init"
+    install -d "$TARGET/usr/etc/s6-linux-init/skel"
+    install -m755 "$ASSETS/skel/"* "$TARGET/usr/etc/s6-linux-init/skel/"
+    chroot "$TARGET" s6-linux-init-maker -1 -B \
+        -p /usr/bin:/usr/sbin:/bin:/sbin -c /etc/s6-linux-init /etc/s6-linux-init \
+        || die "s6-linux-init-maker failed"
+    install -Dm755 "$ASSETS/scripts/rc.init"     "$TARGET/etc/s6-linux-init/scripts/rc.init"
+    install -Dm755 "$ASSETS/scripts/rc.shutdown" "$TARGET/etc/s6-linux-init/scripts/rc.shutdown"
+    ln -sfn ../../etc/s6-linux-init/bin/init "$TARGET/usr/bin/init"
+    for c in halt poweroff reboot shutdown telinit; do
+        [ -e "$TARGET/etc/s6-linux-init/bin/$c" ] && \
+            ln -sfn "../../etc/s6-linux-init/bin/$c" "$TARGET/usr/bin/$c"
+    done
+
+    # elogind: don't let dbus auto-activate a duplicate; drop the overlay in.
+    rm -f "$TARGET/usr/share/dbus-1/system-services/org.freedesktop.login1.service"
+    cp -aT "$ASSETS/overlay" "$TARGET"
+    ok "s6 woven; runit displaced"
+}
+
+configure_system() {
+    step "configuring system..."
+    printf '%s\n' "$HOSTNAME_" > "$TARGET/etc/hostname"
+    printf '127.0.0.1\tlocalhost\n127.0.1.1\t%s\n::1\tlocalhost\n' "$HOSTNAME_" \
+        > "$TARGET/etc/hosts"
+    printf 'Voi6 \\r (\\l)\n\n' > "$TARGET/etc/issue"   # rebrand the login banner
+    cat > "$TARGET/etc/os-release" <<'EOF'
+NAME="Voi6"
+PRETTY_NAME="Voi6 (Void + s6)"
+ID=voi6
+ID_LIKE=void
+EOF
+
+    # fstab by UUID (+ ESP, + tmpfs).
+    local ruuid; ruuid=$(blkid -s UUID -o value "$ROOT")
+    {
+        printf 'UUID=%s\t/\t%s\tdefaults\t0 1\n' "$ruuid" "$FS"
+        if [ -n "${ESP:-}" ]; then
+            printf 'UUID=%s\t/boot/efi\tvfat\tdefaults\t0 2\n' \
+                "$(blkid -s UUID -o value "$ESP")"
+        fi
+        printf 'tmpfs\t/tmp\ttmpfs\tnosuid,nodev,mode=1777\t0 0\n'
+    } > "$TARGET/etc/fstab"
+
+    # Timezone + locale.
+    ln -sf "/usr/share/zoneinfo/$TIMEZONE" "$TARGET/etc/localtime"
+    echo "LANG=$LOCALE" > "$TARGET/etc/locale.conf"
+    if [ -f "$TARGET/etc/default/libc-locales" ]; then
+        sed -i "s/^#\(${LOCALE}\)/\1/" "$TARGET/etc/default/libc-locales"
+        chroot "$TARGET" xbps-reconfigure -f glibc-locales 2>/dev/null || true
+    fi
+
+    # Accounts.
+    chroot "$TARGET" groupadd -rf seat 2>/dev/null || true
+    chroot "$TARGET" useradd -m -G wheel,video,input,audio,network \
+        -s /bin/bash "$USERNAME" 2>/dev/null || true
+    echo "root:${ROOTPASS}"      | chroot "$TARGET" chpasswd
+    echo "${USERNAME}:${USERPASS}" | chroot "$TARGET" chpasswd
+    # wheel -> sudo
+    mkdir -p "$TARGET/etc/sudoers.d"
+    echo '%wheel ALL=(ALL:ALL) ALL' > "$TARGET/etc/sudoers.d/10-wheel"
+    chmod 0440 "$TARGET/etc/sudoers.d/10-wheel"
+    ok "hostname=$HOSTNAME_ user=$USERNAME tz=$TIMEZONE locale=$LOCALE"
+}
+
+install_bootloader() {
+    step "installing GRUB ($(firmware))..."
+    # Serial console kept on so headless/VM boots are visible; harmless on metal.
+    sed -i 's|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT="loglevel=4 console=tty0 console=ttyS0"|' \
+        "$TARGET/etc/default/grub" 2>/dev/null || \
+        echo 'GRUB_CMDLINE_LINUX_DEFAULT="loglevel=4 console=tty0 console=ttyS0"' \
+            >> "$TARGET/etc/default/grub"
+    if [ "$(firmware)" = uefi ]; then
+        chroot "$TARGET" grub-install --target=x86_64-efi \
+            --efi-directory=/boot/efi --bootloader-id=Voi6 --recheck \
+            || die "grub-install (efi) failed"
+    else
+        chroot "$TARGET" grub-install --target=i386-pc --recheck "$DISK" \
+            || die "grub-install (bios) failed"
+    fi
+    chroot "$TARGET" grub-mkconfig -o /boot/grub/grub.cfg \
+        || die "grub-mkconfig failed"
+    ok "GRUB installed"
+}
+
+install_de() {
+    local pkgs=()
+    case "$DE" in
+        none)   ok "DE: none (base only)"; return ;;
+        cage)   pkgs=(cage foot dejavu-fonts-ttf) ;;        # the minimal Wayland session
+        plasma) pkgs=(plasma-desktop sddm) ;;
+        gnome)  pkgs=(gnome-core gdm) ;;
+        *)      die "unknown DE '$DE' (none|cage|plasma|gnome)" ;;
+    esac
+    step "installing desktop: $DE (xbps the Void way)..."
+    XBPS_ARCH=x86_64 xbps-install -Sy -R "$REPO" -r "$TARGET" "${pkgs[@]}" \
+        || die "DE install failed"
+    # NOTE: full Plasma/GNOME session wiring (display-manager service + session
+    # graph) lands in the DE milestone; this fetches the packages for now.
+    ok "DE installed ($DE)"
+}
+
+do_install() {
+    [ -n "$DISK" ] || die "no target disk set"
+    [ -b "$DISK" ] || die "$DISK is not a block device"
+    echo
+    echo "  Voi6 install → $DISK   (this ERASES the disk)"
+    echo "  fs=$FS  host=$HOSTNAME_  user=$USERNAME  de=$DE  fw=$(firmware)"
+    partition_disk
+    format_and_mount
+    install_base
+    bind_pseudo
+    trap unbind_pseudo EXIT
+    weave_s6
+    configure_system
+    install_bootloader
+    install_de
+    unbind_pseudo
+    trap - EXIT
+    # Flush everything to disk and unmount cleanly — otherwise the last writes
+    # (e.g. grub-mkconfig's grub.cfg.new -> grub.cfg rename) can sit in the
+    # guest's cache and be lost if the machine is reset before a sync.
+    sync
+    umount -R "$TARGET" 2>/dev/null || true
+    sync
+    echo; ok "Voi6 installed on $DISK — reboot and remove the install media."
+}
+
+# ── TUI (dialog) ──────────────────────────────────────────────────────────────
+
+list_disks() {
+    lsblk -dno NAME,SIZE,MODEL 2>/dev/null | awk '$1!~/^(loop|sr|ram)/{print "/dev/"$1" "$2" "$3}'
+}
+
+tui() {
+    command -v dialog >/dev/null || die "dialog not installed (use --quick)"
+    local choice
+    choice=$(dialog --stdout --title "Voi6 Installer" --menu "Install Voi6" 12 50 3 \
+        quick "Quick install (whole disk, defaults)" \
+        advanced "Advanced (choose options)" \
+        quit "Quit") || exit 0
+
+    [ "$choice" = quit ] && exit 0
+
+    # Pick the target disk for both paths.
+    local menu=() d
+    while read -r d; do menu+=("$d" ""); done < <(list_disks)
+    DISK=$(dialog --stdout --title "Target disk" \
+        --menu "ERASE which disk?" 14 60 6 "${menu[@]}") || exit 0
+
+    if [ "$choice" = advanced ]; then
+        HOSTNAME_=$(dialog --stdout --inputbox "Hostname" 8 40 "$HOSTNAME_") || exit 0
+        USERNAME=$(dialog --stdout --inputbox "Username" 8 40 "$USERNAME") || exit 0
+        USERPASS=$(dialog --stdout --passwordbox "Password for $USERNAME" 8 40) || exit 0
+        ROOTPASS=$(dialog --stdout --passwordbox "Root password" 8 40) || exit 0
+        DE=$(dialog --stdout --menu "Desktop" 12 50 4 \
+            cage "Minimal Wayland (cage)" \
+            plasma "KDE Plasma" \
+            gnome "GNOME" \
+            none "No desktop (base only)") || exit 0
+    fi
+
+    dialog --yesno "Install Voi6 to $DISK?\n\nThis ERASES the disk." 8 50 || exit 0
+    clear
+    do_install
+}
+
+# ── Entry ─────────────────────────────────────────────────────────────────────
+main() {
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --quick) DISK="$2"; shift 2 ;;
+            --de)    DE="$2"; shift 2 ;;
+            --disk)  DISK="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+    if [ -n "$DISK" ]; then do_install; else tui; fi
+}
+main "$@"

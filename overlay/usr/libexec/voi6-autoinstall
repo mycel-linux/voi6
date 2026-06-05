@@ -1,0 +1,31 @@
+#!/bin/sh
+# Unattended install hook. NO-OP unless the kernel cmdline requests it:
+#   voi6.autoinstall=/dev/sdX   [voi6.de=cage|plasma|gnome|none]
+# This is what makes a live boot able to install itself (and powers CI). On a
+# normally-installed system the flag is absent, so this does nothing.
+
+disk=
+de=cage
+for tok in $(cat /proc/cmdline 2>/dev/null); do
+    case "$tok" in
+        voi6.autoinstall=*) disk="${tok#voi6.autoinstall=}" ;;
+        voi6.de=*)          de="${tok#voi6.de=}" ;;
+    esac
+done
+[ -n "$disk" ] || exit 0
+
+# Output to the console so it shows up over serial / on screen.
+exec >/dev/console 2>&1
+echo "voi6-autoinstall: target=$disk de=$de — waiting for network..."
+i=0
+while [ "$i" -lt 60 ]; do
+    ip route 2>/dev/null | grep -q '^default' && break
+    sleep 1; i=$((i + 1))
+done
+
+echo "voi6-autoinstall: installing..."
+if DE="$de" voi6-install --quick "$disk"; then
+    echo "VOI6-AUTOINSTALL: SUCCESS"
+else
+    echo "VOI6-AUTOINSTALL: FAILED"
+fi

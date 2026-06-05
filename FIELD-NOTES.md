@@ -79,6 +79,32 @@ session works end to end.
 can't write `/dev/console` — `exec cage 2>/dev/console` failed *before* exec, so
 the compositor silently never started. Let compositor stderr stay on its tty.
 
+## Installer integration findings (voi6-install → /mnt + GRUB)
+
+The installer is bootstrap.sh retargeted to /mnt with partitioning + GRUB + users.
+Bugs the install-then-boot loop surfaced:
+
+### I-05 — last writes lost without an explicit sync  🔴
+grub-mkconfig writes `grub.cfg.new` then renames to `grub.cfg`. The rename
+happened in the guest but wasn't flushed to the disk image before the VM stopped,
+so the installed disk had only `grub.cfg.new` → GRUB loaded `normal` but found no
+config → dropped to `grub>`. Fix: the installer must `sync` + `umount -R /mnt` at
+the end. (Symptom that pinned it: full `grub>` with `normal` loaded, not `grub
+rescue>` — proves the fs was readable, so it wasn't a driver/feature problem.)
+
+### I-06 — e2fsprogs 1.47 ext4 features vs GRUB  🟡
+mkfs.ext4 defaults enable `orphan_file` / `metadata_csum_seed`; disable them
+(`-O ^orphan_file,^metadata_csum_seed`) for the root fs so older GRUB readers stay
+happy. (Not the cause of I-05, but a real compat fix worth keeping.)
+
+### I-07 — installed payload ≠ live payload  🟡
+The live image bundles cage/foot/font (bootstrap PKGS); the *installer's* base set
+didn't, and `install_de cage` wrongly assumed "already in base" → installed system
+hit `exec: cage: not found` in a getty respawn loop. Fix: install_de installs the
+compositor stack; launcher guards `command -v cage` so a missing compositor falls
+back to a shell instead of looping. Also: branding (/etc/issue, os-release) must be
+written by the INSTALLER too, not just bootstrap.
+
 ### Path-coupling (not schema gaps, but field-test data)
 - `udevd`: MycelOS `/usr/lib/systemd/systemd-udevd` → Voi6 `/usr/bin/udevd` (eudev).
   The *declaration shape* is identical; only the exec target moves. Good news for

@@ -1,0 +1,11 @@
+name = "voi6-autoinstall"
+kind = "oneshot"
+needs = ["dhcpcd"]
+bundles = ["default"]
+
+# Unattended/netinstall hook. The script no-ops unless the kernel cmdline carries
+# `voi6.autoinstall=<disk>`, so this is harmless on an installed system — it only
+# fires on a live boot asked to install itself. Runs as a oneshot (root, before
+# login) and streams progress to the console. Lives in the live image; on a real
+# install it's present but inert.
+up = "/usr/libexec/voi6-autoinstall"

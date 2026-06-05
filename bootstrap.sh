@@ -38,6 +38,7 @@ PKGS=(
     elogind                                    # logind (login1): sessions/seats
     dhcpcd                                     # networking
     cage foot dejavu-fonts-ttf                 # minimal Wayland session (compositor + term + font)
+    dialog e2fsprogs dosfstools                # the installer (TUI + mkfs.ext4/vfat)
     linux                                      # kernel + (pulls dracut) initramfs
 )
 # Note: seatd is intentionally NOT installed — elogind provides seat management
@@ -182,6 +183,19 @@ for cmd in halt poweroff reboot shutdown telinit; do
         ln -sfn "../../etc/s6-linux-init/bin/$cmd" "$ROOTFS/usr/bin/$cmd"
 done
 ok "s6-linux-init wired; runit displaced"
+
+# ── 7. Make the image installer-capable ───────────────────────────────────────
+# Ship the installer + the SAME service/skel/overlay declarations the build used,
+# plus the mycel-compose binary, so the installer weaves the target identically.
+step "installing the Voi6 installer + assets..."
+install -Dm755 "$HERE/installer/voi6-install" "$ROOTFS/usr/bin/voi6-install"
+install -Dm755 "$COMPOSE"                      "$ROOTFS/usr/bin/mycel-compose"
+install -d "$ROOTFS/usr/share/voi6"
+cp -aT "$HERE/services"            "$ROOTFS/usr/share/voi6/services"
+cp -aT "$HERE/s6-linux-init/skel"  "$ROOTFS/usr/share/voi6/skel"
+cp -aT "$HERE/s6-linux-init/scripts" "$ROOTFS/usr/share/voi6/scripts"
+cp -aT "$HERE/overlay"             "$ROOTFS/usr/share/voi6/overlay"
+ok "installer ready (voi6-install)"
 
 cleanup
 trap - EXIT
