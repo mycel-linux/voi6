@@ -1,6 +1,14 @@
-# Voi6
+<p align="center">
+  <img src="assets/logo.png" alt="Voi6 logo" width="140">
+</p>
 
-**Void Linux with s6 — a field test for [mycel-compose](../mycel-os/mycel-compose).**
+<h1 align="center">Voi6</h1>
+
+<p align="center">
+  <strong>Void Linux with s6 — a field test for mycel-compose, the mycelinux service composer.</strong>
+</p>
+
+---
 
 Void ships [runit](http://smarden.org/runit/). Voi6 replaces it with the
 [skarnet s6 suite](https://skarnet.org/software/) (`s6` + `s6-rc` +
