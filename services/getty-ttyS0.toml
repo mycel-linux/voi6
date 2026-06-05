@@ -1,6 +1,6 @@
 name = "getty-ttyS0"
 kind = "longrun"
-needs = ["elogind-ready"]
+needs = ["elogind"]
 bundles = ["default"]
 
 # Serial-console login. Essential for headless/QEMU bring-up and CI (the boot is

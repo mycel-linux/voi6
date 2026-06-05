@@ -1,9 +1,9 @@
 name = "getty-tty1"
 kind = "longrun"
-needs = ["elogind-ready"]
+needs = ["elogind"]
 bundles = ["default"]
 
-# Primary login. Plain getty -> /bin/login; gated on elogind-ready so a login
-# here gets a logind session (and XDG_RUNTIME_DIR) — the seat for the future
-# graphical session lives on tty1.
+# Primary login. Plain getty -> /bin/login. Depends on elogind, whose `ready`
+# gate makes s6-rc wait until login1 is owned — so a login here gets a real
+# logind session (and XDG_RUNTIME_DIR). The seat for the graphical session is tty1.
 exec = "/usr/bin/agetty --noclear tty1 linux"

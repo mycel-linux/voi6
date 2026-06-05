@@ -52,14 +52,17 @@ XDG_RUNTIME_DIR**. Boot log proved the ordering (autologin before elogind's
 "New seat seat0").
 **Why the schema fails:** `needs` only guarantees *started* (process exec'd), not
 *ready* (bus name owned). s6-rc has no readiness concept by default.
-**Workaround used in Voi6:** a `elogind-ready` **oneshot** that polls
-`dbus NameHasOwner org.freedesktop.login1` until true; gettys `need` it. This
-blocks the s6-rc transition until a logind session can really be created. Result:
-`New session 1 of user voi`, `XDG_RUNTIME_DIR=/run/user/1000`, active session. ✓
-**Proposed mycel-compose change (now PRIORITY, not v3-someday):** a
-`ready = "dbus:org.freedesktop.login1"` field that emits exactly this readiness
-gate (poll/`s6-notifyoncheck`) automatically, deleting hand-rolled `*-ready`
-oneshots. This is the single highest-value finding from Voi6 so far.
+**First workaround (now removed):** a hand-rolled `elogind-ready` oneshot that
+polled `dbus NameHasOwner login1`; gettys depended on it.
+**FIXED IN THE COMPOSER:** mycel-compose now has a `ready = "dbus:..."` field
+(also `path:`/`exec:`) that emits the s6 readiness wiring automatically —
+`notification-fd` (3) + a `data/check` probe + an `s6-notifyoncheck` wrap of the
+daemon. Voi6's elogind.toml is now just `ready = "dbus:org.freedesktop.login1"`,
+the oneshot is deleted, and gettys just `need ["elogind"]`. Verified on a real
+boot: elogind reaches readiness *before* autologin, `New session 1`,
+`XDG_RUNTIME_DIR=/run/user/1000`, active session. ✓
+**Status:** the highest-value Voi6 finding, shipped back into mycelinux — the
+field test's whole reason for existing, demonstrated once end-to-end.
 
 ### F-04 — serial consoles get no seat (environment note, not a gap) 🟢
 A login on `ttyS0` is not VT-bound, so elogind assigns no seat (SEAT blank in
