@@ -36,10 +36,13 @@ PKGS=(
     skalibs execline s6 s6-rc s6-linux-init   # the supervision suite
     dbus                                       # system bus
     elogind                                    # logind (login1): sessions/seats
-    seatd                                      # seat management
     dhcpcd                                     # networking
+    cage foot dejavu-fonts-ttf                 # minimal Wayland session (compositor + term + font)
     linux                                      # kernel + (pulls dracut) initramfs
 )
+# Note: seatd is intentionally NOT installed — elogind provides seat management
+# via logind, and running both fights over seat0 (F-04). libseat uses the logind
+# backend automatically when an elogind session exists.
 
 cleanup() {
     umount -lR "$ROOTFS/var/cache/xbps" 2>/dev/null || true

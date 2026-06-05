@@ -64,13 +64,20 @@ boot: elogind reaches readiness *before* autologin, `New session 1`,
 **Status:** the highest-value Voi6 finding, shipped back into mycelinux — the
 field test's whole reason for existing, demonstrated once end-to-end.
 
-### F-04 — serial consoles get no seat (environment note, not a gap) 🟢
-A login on `ttyS0` is not VT-bound, so elogind assigns no seat (SEAT blank in
-`loginctl`). The session stack still works (session + XDG_RUNTIME_DIR), but a
-compositor needs `seat0`, which only a **tty1/VT** session gets. Compositor
-bring-up must therefore run on tty1, captured via the QEMU display, not serial.
-Also: seatd AND elogind both manage seat0 now — likely drop seatd (or point
-libseat at one) once the compositor lands, to avoid two seat managers.
+### F-04 — serial consoles get no seat (environment note, not a gap) 🟢 [resolved]
+A login on `ttyS0` is not VT-bound, so elogind assigns no seat (SEAT blank). The
+session stack still works there, but a compositor needs `seat0`, which only a
+**tty1/VT** session gets. RESOLVED: getty-tty1 autologins `voi` (→ VT-bound seat0
+session, confirmed `2 1000 voi seat0 tty1`), and the profile.d launcher execs
+`cage -- foot` on tty1. **seatd was removed entirely** — elogind is the sole seat
+manager; libseat uses its logind backend. Running both fought over seat0.
+Verified: cage (wlroots, `WLR_RENDERER=pixman`, no GL driver in the VM) renders
+foot on a virtio-GPU, captured headless via QMP `screendump`. v1.5 graphical
+session works end to end.
+
+### Voi6 launcher gotcha (not a finding, just a scar): a non-root login shell
+can't write `/dev/console` — `exec cage 2>/dev/console` failed *before* exec, so
+the compositor silently never started. Let compositor stderr stay on its tty.
 
 ### Path-coupling (not schema gaps, but field-test data)
 - `udevd`: MycelOS `/usr/lib/systemd/systemd-udevd` → Voi6 `/usr/bin/udevd` (eudev).

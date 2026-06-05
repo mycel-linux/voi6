@@ -4,7 +4,7 @@ needs = ["udevd"]
 bundles = ["core"]
 
 # Coldplug: replay add events for everything already present, then wait for the
-# queue to drain so seatd/login see input + DRM devices.
+# queue to drain so the compositor/login see input + DRM (/dev/dri) devices.
 #
 # FIELD NOTE (F-01): a oneshot's `up` is a SINGLE command line, but coldplug is
 # three sequential steps — so we hand-roll `/bin/sh -c "...; ...; ..."`, exactly

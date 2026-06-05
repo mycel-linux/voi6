@@ -1,8 +1,0 @@
-name = "seatd"
-kind = "longrun"
-needs = ["udev-trigger"]
-bundles = ["core"]
-
-# Seat management for the (future) compositor. Members of the `seat` group may
-# talk to it; bootstrap ensures that group exists.
-exec = "seatd -g seat"

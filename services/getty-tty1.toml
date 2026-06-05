@@ -3,7 +3,8 @@ kind = "longrun"
 needs = ["elogind"]
 bundles = ["default"]
 
-# Primary login. Plain getty -> /bin/login. Depends on elogind, whose `ready`
-# gate makes s6-rc wait until login1 is owned — so a login here gets a real
-# logind session (and XDG_RUNTIME_DIR). The seat for the graphical session is tty1.
-exec = "/usr/bin/agetty --noclear tty1 linux"
+# Primary login + graphical session. Autologin `voi` so the PAM session
+# (pam_elogind) creates a VT-bound seat0 logind session; the profile.d launcher
+# then execs the Wayland compositor (cage) on tty1. Depends on elogind, whose
+# `ready` gate makes s6-rc wait until login1 is owned before this starts.
+exec = "/usr/bin/agetty --noclear --autologin voi tty1 linux"
