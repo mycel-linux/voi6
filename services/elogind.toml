@@ -16,3 +16,4 @@ bundles = ["core"]
 # hand-rolled `elogind-ready` oneshot (the F-03 finding, now fixed in the composer).
 exec = "/usr/libexec/elogind/elogind"
 ready = "dbus:org.freedesktop.login1"
+log = true   # F-02: also test ready + log on one service (readiness fd3 + log pipe fd1)

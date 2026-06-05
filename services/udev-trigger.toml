@@ -5,8 +5,10 @@ bundles = ["core"]
 
 # Coldplug: replay add events for everything already present, then wait for the
 # queue to drain so the compositor/login see input + DRM (/dev/dri) devices.
-#
-# FIELD NOTE (F-01): a oneshot's `up` is a SINGLE command line, but coldplug is
-# three sequential steps — so we hand-roll `/bin/sh -c "...; ...; ..."`, exactly
-# as MycelOS's udev-trigger.toml does. The schema cannot express a *sequence*.
-up = '/bin/sh -c "udevadm trigger --type=subsystems --action=add; udevadm trigger --type=devices --action=add; udevadm settle --timeout=30"'
+# A oneshot `up` as a LIST runs the steps in sequence (F-01, now in mycel-compose)
+# — no more hand-rolled `/bin/sh -c "...; ...; ..."`.
+up = [
+    "udevadm trigger --type=subsystems --action=add",
+    "udevadm trigger --type=devices --action=add",
+    "udevadm settle --timeout=30",
+]

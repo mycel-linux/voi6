@@ -15,33 +15,26 @@ Each finding links the proposed mycel-compose change.
 
 ## Findings
 
-### F-01 — oneshot `up` can't express a multi-step sequence  [GAP] 🟡
+### F-01 — oneshot `up` can't express a multi-step sequence  [FIXED] 🟡
 **Service:** udev-trigger
-**What Void needs:** coldplug is three ordered commands — `udevadm trigger
---type=subsystems`, then `--type=devices`, then `udevadm settle`.
-**Why the schema fails:** a oneshot's `up` is a *single* command line (written
-verbatim as execline). The README claims "a plain command line works as-is," but
-any real coldplug/mount/modules oneshot is a sequence.
-**Workaround used in Voi6:** hand-rolled `up = '/bin/sh -c "a; b; c"'`.
-**Corroboration:** MycelOS's own `udev-trigger.toml` already does this exact
-`/bin/sh -c` dance — so this gap is not Void-specific, it's latent in MycelOS too.
-**Proposed mycel-compose change:** allow `up`/`down` to be a *list* of lines
-(like longrun `setup`), emitted as an execline `foreground { } ...` block or a
-generated `#!/bin/sh` oneshot script. Removes every `/bin/sh -c` from oneshots.
+**Was:** a oneshot's `up` was a single execline line, so coldplug's three steps
+needed a hand-rolled `up = '/bin/sh -c "a; b; c"'` (latent in MycelOS too).
+**FIXED IN THE COMPOSER:** `up`/`down` now accept a *list*; mycel-compose renders
+it as one `/bin/sh -c` script (valid execline). Voi6's udev-trigger is now a clean
+`up = ["udevadm trigger ...", "udevadm trigger ...", "udevadm settle ..."]`.
+Verified: cage gets /dev/dri after coldplug, so the sequence ran.
 
-### F-02 — no way to attach a logger to a longrun  [GAP] 🟡
-**Service:** dbus, udevd, dhcpcd (every supervised daemon)
-**What Void needs:** s6's idiom for capturing a daemon's stdout/stderr is a
-paired `s6-log` *consumer* service (`producer-for`/`consumer-for` files +
-`notification-fd`). Under `s6-linux-init -B` (no catch-all logger), an
-un-paired daemon's output is discarded.
-**Why the schema fails:** `Service` has no `log` / `producer-for` /
-`consumer-for` fields; the composer never emits logger service dirs.
-**Workaround used in Voi6:** none yet — logs are simply lost (acceptable for a
-v1 bring-up, not for anything real).
-**Proposed mycel-compose change:** a `log = true` (or `log = "<s6-log script>"`)
-field that emits a sibling `<name>-log` consumer service, wires
-`producer-for`/`consumer-for`, and sets the producer's `notification-fd`.
+### F-02 — no way to attach a logger to a longrun  [FIXED] 🟡
+**Service:** dbus, udevd, elogind (every supervised daemon)
+**Was:** under `s6-linux-init -B` (no catch-all logger), a daemon's output was
+discarded; the schema couldn't express an s6-log consumer.
+**FIXED IN THE COMPOSER:** `log = true` on a longrun emits a generated
+`<name>-log` consumer (`consumer-for`), sets `producer-for` on the daemon, appends
+`2>&1` so stderr is captured too, and folds the logger into the producer's bundles.
+The logger runs `s6-log` into /var/log/<name>. Verified: elogind's `New
+seat`/`New session` messages vanished from the console (diverted into the pipe),
+and /var/log/{udevd,dbus,elogind} were created. Also works combined with `ready`
+(notification-fd 3 + log pipe fd 1 coexist on elogind).
 
 ### F-03 — `needs` orders *started*, not *ready*  [GAP, CONFIRMED+fixed] 🔴
 **Service:** elogind / its consumers (gettys doing pam_elogind login)
