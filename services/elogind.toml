@@ -1,0 +1,16 @@
+name = "elogind"
+kind = "longrun"
+needs = ["dbus"]
+bundles = ["core"]
+
+# The standalone logind (org.freedesktop.login1): session tracking, seat
+# assignment, and XDG_RUNTIME_DIR — required by any Wayland session/DE. We run it
+# as a supervised service, so dbus must NOT also auto-activate it (bootstrap
+# removes the dbus .service file, else dbus spawns a duplicate that fights this
+# one for the bus name). Needs cgroup2 mounted (rc.init handles that).
+#
+# FIELD NOTE (F-03): pam_elogind at login talks to login1 on the bus, so for
+# autologin that races boot, elogind must be *ready* (owning the name), not just
+# *started*. Plain s6-rc ordering only guarantees the latter — the motivating
+# case for adding readiness to mycel-compose.
+exec = "/usr/libexec/elogind/elogind"

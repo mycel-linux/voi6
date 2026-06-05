@@ -43,13 +43,31 @@ v1 bring-up, not for anything real).
 field that emits a sibling `<name>-log` consumer service, wires
 `producer-for`/`consumer-for`, and sets the producer's `notification-fd`.
 
-### F-03 — `needs` orders *started*, not *ready*  [GAP, anticipated] 🟢
-**Service:** dbus consumers (bites later, with NetworkManager/compositor)
-**What Void needs:** for v1 (dhcpcd/seatd) start-ordering is sufficient — dbus's
-socket appears in milliseconds and clients retry. Recorded now because the
-moment a desktop/NM lands it becomes real.
-**Proposed mycel-compose change:** the roadmap's v3 `ready = "..."` →
-`s6-notifyoncheck` wiring.
+### F-03 — `needs` orders *started*, not *ready*  [GAP, CONFIRMED+fixed] 🔴
+**Service:** elogind / its consumers (gettys doing pam_elogind login)
+**What happened (v1.5):** with `getty needs ["elogind"]`, autologin still raced
+elogind — login fired before elogind owned `org.freedesktop.login1`, so
+pam_elogind (`-session optional`) silently no-op'd: **no logind session, no
+XDG_RUNTIME_DIR**. Boot log proved the ordering (autologin before elogind's
+"New seat seat0").
+**Why the schema fails:** `needs` only guarantees *started* (process exec'd), not
+*ready* (bus name owned). s6-rc has no readiness concept by default.
+**Workaround used in Voi6:** a `elogind-ready` **oneshot** that polls
+`dbus NameHasOwner org.freedesktop.login1` until true; gettys `need` it. This
+blocks the s6-rc transition until a logind session can really be created. Result:
+`New session 1 of user voi`, `XDG_RUNTIME_DIR=/run/user/1000`, active session. ✓
+**Proposed mycel-compose change (now PRIORITY, not v3-someday):** a
+`ready = "dbus:org.freedesktop.login1"` field that emits exactly this readiness
+gate (poll/`s6-notifyoncheck`) automatically, deleting hand-rolled `*-ready`
+oneshots. This is the single highest-value finding from Voi6 so far.
+
+### F-04 — serial consoles get no seat (environment note, not a gap) 🟢
+A login on `ttyS0` is not VT-bound, so elogind assigns no seat (SEAT blank in
+`loginctl`). The session stack still works (session + XDG_RUNTIME_DIR), but a
+compositor needs `seat0`, which only a **tty1/VT** session gets. Compositor
+bring-up must therefore run on tty1, captured via the QEMU display, not serial.
+Also: seatd AND elogind both manage seat0 now — likely drop seatd (or point
+libseat at one) once the compositor lands, to avoid two seat managers.
 
 ### Path-coupling (not schema gaps, but field-test data)
 - `udevd`: MycelOS `/usr/lib/systemd/systemd-udevd` → Voi6 `/usr/bin/udevd` (eudev).

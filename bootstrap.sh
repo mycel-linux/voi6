@@ -35,6 +35,7 @@ fi
 PKGS=(
     skalibs execline s6 s6-rc s6-linux-init   # the supervision suite
     dbus                                       # system bus
+    elogind                                    # logind (login1): sessions/seats
     seatd                                      # seat management
     dhcpcd                                     # networking
     linux                                      # kernel + (pulls dracut) initramfs
@@ -126,6 +127,15 @@ if ! chroot "$ROOTFS" id voi >/dev/null 2>&1; then
     chroot "$ROOTFS" useradd -m -G wheel,seat,video,input -s /bin/bash voi 2>/dev/null || true
 fi
 chroot "$ROOTFS" sh -c 'passwd -d root; passwd -d voi' 2>/dev/null || true
+
+# elogind: we supervise it as an s6 service, so stop dbus from auto-activating a
+# SECOND instance that would fight for org.freedesktop.login1.
+rm -f "$ROOTFS/usr/share/dbus-1/system-services/org.freedesktop.login1.service"
+# (No PAM edits needed: Void's /etc/pam.d/system-login already ships
+#  `-session optional pam_elogind.so`, so logind sessions are created at login.)
+
+# Overlay: drop-in files copied verbatim into the rootfs (profile.d session entry).
+cp -aT "$HERE/overlay" "$ROOTFS"
 ok "base config written"
 
 # ── 5. Weave the s6-rc tree with mycel-compose (the field test) ────────────────

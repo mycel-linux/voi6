@@ -1,9 +1,13 @@
 name = "getty-ttyS0"
 kind = "longrun"
+needs = ["elogind-ready"]
 bundles = ["default"]
 
 # Serial-console login. Essential for headless/QEMU bring-up and CI (the boot is
 # captured over ttyS0). agetty -L disables carrier detection for the serial line.
+# Autologin as `voi` so the PAM session stack (pam_elogind) runs and a logind
+# session is created — the v1.5 verification path. --autologin still execs
+# /bin/login, which runs the full account+session PAM stack (only auth is skipped).
 # Caveat: on bare metal with no serial port, ttyS0 is absent and agetty respawns;
 # this should become conditional once Voi6 grows past the VM-first stage.
-exec = "/usr/bin/agetty -L 115200 ttyS0 linux"
+exec = "/usr/bin/agetty -L --autologin voi 115200 ttyS0 linux"

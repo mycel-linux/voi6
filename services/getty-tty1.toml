@@ -1,6 +1,9 @@
 name = "getty-tty1"
 kind = "longrun"
+needs = ["elogind-ready"]
 bundles = ["default"]
 
-# Primary login. Plain getty -> /bin/login; no autologin yet (v1 is a TTY).
+# Primary login. Plain getty -> /bin/login; gated on elogind-ready so a login
+# here gets a logind session (and XDG_RUNTIME_DIR) — the seat for the future
+# graphical session lives on tty1.
 exec = "/usr/bin/agetty --noclear tty1 linux"

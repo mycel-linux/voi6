@@ -6,6 +6,13 @@
 mount -a 2>/dev/null || true
 mkdir -p /run/user /run/lock
 
+# cgroup v2 — REQUIRED by elogind (it crash-loops with "Cannot determine cgroup
+# we are running in" otherwise). Mount the unified hierarchy if it isn't already.
+if [ ! -e /sys/fs/cgroup/cgroup.controllers ]; then
+    mkdir -p /sys/fs/cgroup
+    mount -t cgroup2 cgroup2 /sys/fs/cgroup 2>/dev/null || true
+fi
+
 # machine-id — dbus refuses to start without one.
 [ -s /etc/machine-id ] || dbus-uuidgen --ensure=/etc/machine-id 2>/dev/null || true
 mkdir -p /var/lib/dbus

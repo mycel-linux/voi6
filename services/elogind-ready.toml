@@ -1,0 +1,16 @@
+name = "elogind-ready"
+kind = "oneshot"
+needs = ["elogind"]
+bundles = ["core"]
+
+# Readiness gate for F-03. `needs = ["elogind"]` only guarantees elogind has been
+# *started*, not that it has acquired org.freedesktop.login1 on the bus — so a
+# getty/login that depends only on `elogind` can still race it (autologin fires
+# before login1 exists → pam_elogind silently no-ops → no session). This oneshot
+# blocks the s6-rc transition until login1 is actually owned, so anything that
+# needs `elogind-ready` starts only once a logind session can really be created.
+#
+# This is the manual version of the mycel-compose v3 `ready = "dbus:..."` feature:
+# once the composer can emit s6 readiness wiring, this whole file disappears.
+# (And note: another multi-step oneshot forced through `/bin/sh -c` — F-01 again.)
+up = '/bin/sh -c "for i in $(seq 1 50); do dbus-send --system --dest=org.freedesktop.DBus --print-reply /org/freedesktop/DBus org.freedesktop.DBus.NameHasOwner string:org.freedesktop.login1 2>/dev/null | grep -q true && exit 0; sleep 0.1; done; exit 0"'
