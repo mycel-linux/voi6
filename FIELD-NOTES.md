@@ -56,3 +56,31 @@ moment a desktop/NM lands it becomes real.
   The *declaration shape* is identical; only the exec target moves. Good news for
   portability: no schema change needed, just data.
 - No `elogind` in Voi6 v1 (no desktop) — so `core` is smaller than MycelOS's.
+
+## Void integration findings (putting s6 on Void — not mycel-compose gaps)
+
+These are about displacing runit on Void; they don't touch the composer, but
+they're the real cost of "s6 on Void" and worth recording.
+
+### I-01 — `s6-linux-init` hard-conflicts with `runit-void`  🔴
+Both claim PID 1, so xbps refuses to install s6-linux-init alongside runit-void.
+Removing runit-void is blocked by the meta that pins it (`base-container-full`
+in the ROOTFS; `base-system` on disk images). Fix: `xbps-remove` the meta (no
+`-R` — that would orphan-remove glibc), then `runit-void`, then install s6.
+
+### I-02 — Void's `s6-linux-init` package ships no skel  🔴
+The package installs only the binaries. `s6-linux-init-maker`'s compiled-in
+default skeldir (`/usr/etc/s6-linux-init/skel`) doesn't exist, so the maker dies
+copying `skel/runlevel`. Fix: vendor the upstream 1.1.3.0 skel in the repo
+(`s6-linux-init/skel/`) and restore it to the default location before running the
+maker. (MycelOS never hits this — it builds the suite from skarnet source, which
+includes the skel.)
+
+### I-03 — stale ROOTFS + current repo = ABI mismatch  🔴
+The published ROOTFS is ~16 months old; installing current-repo packages onto it
+breaks ABI. Concretely: `dracut-109`'s `dracut-install` links `LIBKMOD_33`, but
+the base ships an older `libkmod`, so EVERY `dracut-install` fails and initramfs
+generation dies (`installkernel failed in module drm`). Fix: `xbps-install -Suy`
+(full upgrade) BEFORE adding packages — standard Void practice (no partial
+upgrades). Side note: `mknod` of device nodes fails under `unshare --map-auto`
+(unprivileged userns forbids it), but dracut treats those as non-fatal.

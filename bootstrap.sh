@@ -12,6 +12,7 @@ ROOTFS="$BUILD/rootfs"
 TARBALL="$BUILD/void-rootfs.tar.xz"
 SERVICES="$HERE/services"
 SCRIPTS="$HERE/s6-linux-init/scripts"
+SKEL="$HERE/s6-linux-init/skel"
 COMPOSE="${COMPOSE:-/home/tghrl/mycel-os/mycel-compose/target/release/mycel-compose}"
 
 BLUE='\033[0;34m'; GREEN='\033[0;32m'; RED='\033[0;31m'; NC='\033[0m'
@@ -71,7 +72,13 @@ ok "chroot ready"
 
 # ── 3. Install the s6 stack + kernel via xbps ─────────────────────────────────
 step "xbps-install: ${PKGS[*]}"
-chroot "$ROOTFS" xbps-install -Suy xbps >/dev/null 2>&1 || true   # self-update first
+# Full system upgrade FIRST. The stock ROOTFS is ~16 months old, but we install
+# from the CURRENT repo — mixing them is an ABI mismatch (e.g. dracut-109's
+# dracut-install needs a newer libkmod (LIBKMOD_33) than the stale base ships,
+# so initramfs generation dies). xbps updates itself on the first pass; the
+# second pass completes the rest of the system.
+chroot "$ROOTFS" xbps-install -Suy xbps || die "xbps self-update failed"
+chroot "$ROOTFS" xbps-install -Suy      || die "full system upgrade failed"
 
 # Void packages s6-linux-init as a HARD CONFLICT with runit-void: both claim
 # PID 1. Displacing runit means actually removing it (and the base-system meta
@@ -110,6 +117,9 @@ PRETTY_NAME="Voi6 (Void + s6)"
 ID=voi6
 ID_LIKE=void
 EOF
+# Login banner — base-files ships a Void-branded /etc/issue; rebrand it.
+# agetty expands \r (kernel release) and \l (tty name).
+printf 'Voi6 \\r (\\l)\n\n' > "$ROOTFS/etc/issue"
 # seatd's group, and a normal login user.
 chroot "$ROOTFS" groupadd -rf seat 2>/dev/null || true
 if ! chroot "$ROOTFS" id voi >/dev/null 2>&1; then
@@ -129,11 +139,15 @@ ok "s6-rc database compiled"
 
 # ── 6. s6-linux-init as PID 1 (displace runit) ────────────────────────────────
 step "installing s6-linux-init as PID 1..."
-# Void's s6-linux-init package ships a skeleton /etc/s6-linux-init, but
-# s6-linux-init-maker refuses to write into an existing dir. Clear it first so
-# the maker generates a fresh, self-consistent config (MycelOS never hits this
-# because it builds s6 from source — the dir doesn't pre-exist there).
+# Void's s6-linux-init package ships ONLY the binaries — no skel/ templates, and
+# it leaves a stray /etc/s6-linux-init dir. Two fixes the from-source MycelOS
+# build never needs:
+#   1. s6-linux-init-maker refuses to write into an existing basedir → clear it.
+#   2. the maker's compiled-in default skeldir (/usr/etc/s6-linux-init/skel) is
+#      absent on Void → restore the upstream skel we vendor in the repo.
 rm -rf "$ROOTFS/etc/s6-linux-init"
+install -d "$ROOTFS/usr/etc/s6-linux-init/skel"
+install -m755 "$SKEL"/* "$ROOTFS/usr/etc/s6-linux-init/skel/"
 chroot "$ROOTFS" s6-linux-init-maker \
     -1 -B \
     -p /usr/bin:/usr/sbin:/bin:/sbin \
@@ -144,12 +158,15 @@ chroot "$ROOTFS" s6-linux-init-maker \
 install -Dm755 "$SCRIPTS/rc.init"     "$ROOTFS/etc/s6-linux-init/scripts/rc.init"
 install -Dm755 "$SCRIPTS/rc.shutdown" "$ROOTFS/etc/s6-linux-init/scripts/rc.shutdown"
 
-# /sbin/init was runit-init; point it at s6-linux-init's init (relative link).
-ln -sfn ../etc/s6-linux-init/bin/init "$ROOTFS/usr/sbin/init"
-ln -sfn ../etc/s6-linux-init/bin/init "$ROOTFS/usr/bin/init" 2>/dev/null || true
+# /sbin/init was runit-init; point it at s6-linux-init's init. MUST be a RELATIVE
+# link (dracut validates /sysroot/sbin/init before switch_root; an absolute target
+# resolves against the initramfs root and fails). /sbin and /usr/sbin both resolve
+# to /usr/bin (usr-merged), so we write /usr/bin/init; from there /etc is TWO
+# levels up: ../../etc (not ../etc — that would be the nonexistent /usr/etc).
+ln -sfn ../../etc/s6-linux-init/bin/init "$ROOTFS/usr/bin/init"
 for cmd in halt poweroff reboot shutdown telinit; do
     [ -e "$ROOTFS/etc/s6-linux-init/bin/$cmd" ] && \
-        ln -sfn "../etc/s6-linux-init/bin/$cmd" "$ROOTFS/usr/bin/$cmd"
+        ln -sfn "../../etc/s6-linux-init/bin/$cmd" "$ROOTFS/usr/bin/$cmd"
 done
 ok "s6-linux-init wired; runit displaced"
 
