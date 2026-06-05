@@ -1,0 +1,9 @@
+#!/bin/sh
+# Voi6 shutdown — bring all services down cleanly before the kernel powers off.
+s6-rc -l /run/s6-rc -Da change default 2>/dev/null || true
+
+# Save an entropy seed for next boot.
+mkdir -p /var/lib/misc
+dd if=/dev/urandom of=/var/lib/misc/random-seed bs=512 count=1 2>/dev/null || true
+
+sync

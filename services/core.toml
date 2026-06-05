@@ -1,0 +1,5 @@
+name = "core"
+kind = "bundle"
+# The always-up base: device management, the system bus, seat management.
+# Members declare `bundles = ["core"]` themselves. core joins default.
+bundles = ["default"]

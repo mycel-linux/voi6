@@ -1,0 +1,4 @@
+name = "default"
+kind = "bundle"
+# Members (core, dhcpcd, getty-tty1, getty-tty2) declare `bundles = ["default"]`
+# themselves; the composer folds them in.

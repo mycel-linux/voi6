@@ -1,0 +1,12 @@
+name = "udev-trigger"
+kind = "oneshot"
+needs = ["udevd"]
+bundles = ["core"]
+
+# Coldplug: replay add events for everything already present, then wait for the
+# queue to drain so seatd/login see input + DRM devices.
+#
+# FIELD NOTE (F-01): a oneshot's `up` is a SINGLE command line, but coldplug is
+# three sequential steps — so we hand-roll `/bin/sh -c "...; ...; ..."`, exactly
+# as MycelOS's udev-trigger.toml does. The schema cannot express a *sequence*.
+up = '/bin/sh -c "udevadm trigger --type=subsystems --action=add; udevadm trigger --type=devices --action=add; udevadm settle --timeout=30"'

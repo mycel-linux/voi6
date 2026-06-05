@@ -1,0 +1,8 @@
+name = "dhcpcd"
+kind = "longrun"
+needs = ["udevd"]
+bundles = ["default"]
+
+# Minimal networking for v1 (NetworkManager comes later). -B keeps dhcpcd in the
+# foreground so s6 can supervise it directly.
+exec = "dhcpcd -B"

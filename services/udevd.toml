@@ -1,0 +1,9 @@
+name = "udevd"
+kind = "longrun"
+bundles = ["core"]
+
+# Void ships eudev (glibc, no systemd) — its udevd is the real device manager,
+# unlike MycelOS which borrows systemd-udevd standalone. This path difference is
+# exactly the kind of distro coupling the field test is meant to surface: the
+# *declaration shape* is identical, only the exec target moves.
+exec = "/usr/bin/udevd"

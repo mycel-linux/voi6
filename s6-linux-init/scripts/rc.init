@@ -1,0 +1,31 @@
+#!/bin/sh
+# Voi6 stage 2 — run by s6-linux-init once s6-svscan is supervising the scandir.
+# Early mounts (/proc /sys /dev /run) are already done by s6-linux-init stage 1.
+
+# fstab mounts (tmpfs /tmp, /dev/shm, etc.) + runtime dirs
+mount -a 2>/dev/null || true
+mkdir -p /run/user /run/lock
+
+# machine-id — dbus refuses to start without one.
+[ -s /etc/machine-id ] || dbus-uuidgen --ensure=/etc/machine-id 2>/dev/null || true
+mkdir -p /var/lib/dbus
+ln -sf /etc/machine-id /var/lib/dbus/machine-id
+
+# Hostname straight to the kernel (no dependency on a `hostname` binary).
+[ -r /etc/hostname ] && cat /etc/hostname > /proc/sys/kernel/hostname 2>/dev/null
+
+# Seed entropy from last boot if present.
+[ -f /var/lib/misc/random-seed ] && \
+    cat /var/lib/misc/random-seed > /dev/urandom 2>/dev/null
+
+# ── Bring up services via s6-rc ───────────────────────────────────────────────
+SCANDIR=/run/service
+if s6-rc-init -c /etc/s6-rc/compiled -l /run/s6-rc "$SCANDIR" 2>/dev/null; then
+    if ! s6-rc -l /run/s6-rc -u change default; then
+        echo "!! s6-rc: failed to bring up the default bundle" > /dev/console
+    fi
+else
+    # Without this the boot would have no login at all — keep it recoverable.
+    echo "!! s6-rc-init failed on $SCANDIR — emergency shell on tty1" > /dev/console
+    setsid -c /usr/bin/agetty -n -l /bin/sh 38400 tty1 linux &
+fi

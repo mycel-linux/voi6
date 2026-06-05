@@ -1,0 +1,13 @@
+name = "dbus"
+kind = "longrun"
+needs = ["udevd"]
+bundles = ["core"]
+
+# The system bus. dbus-daemon creates its socket within milliseconds and
+# dependents retry, so plain start-ordering (not readiness) is enough here.
+#
+# FIELD NOTE (F-02): with s6-linux-init run -B (no catch-all logger), this
+# daemon's stderr goes nowhere. A real setup wants a paired s6-log consumer,
+# which the schema has no way to express.
+setup = ["mkdir -p /run/dbus"]
+exec = "dbus-daemon --system --nofork --nopidfile"

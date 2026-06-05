@@ -1,0 +1,6 @@
+name = "getty-tty1"
+kind = "longrun"
+bundles = ["default"]
+
+# Primary login. Plain getty -> /bin/login; no autologin yet (v1 is a TTY).
+exec = "/usr/bin/agetty --noclear tty1 linux"

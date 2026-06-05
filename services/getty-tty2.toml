@@ -1,0 +1,5 @@
+name = "getty-tty2"
+kind = "longrun"
+bundles = ["default"]
+
+exec = "/usr/bin/agetty tty2 linux"
