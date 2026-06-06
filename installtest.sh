@@ -9,7 +9,7 @@ rm -f "$SER"
 KVM=(); [ -e /dev/kvm ] && KVM=(-enable-kvm -cpu host)
 qemu-system-x86_64 "${KVM[@]}" -m 2048 -smp 2 \
     -kernel "$B/vmlinuz" -initrd "$B/initramfs.img" \
-    -append "root=/dev/vda rw init=/sbin/init console=ttyS0 loglevel=4 voi6.autoinstall=/dev/vdb voi6.de=cage" \
+    -append "root=/dev/vda rw init=/sbin/init console=ttyS0 loglevel=4 voi6.autoinstall=/dev/vdb voi6.de=${VOI6_DE:-cage}" \
     -drive "file=$B/voi6.img,format=raw,if=virtio" \
     -drive "file=$B/target.img,format=raw,if=virtio" \
     -netdev user,id=n0 -device virtio-net,netdev=n0 \

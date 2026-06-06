@@ -8,7 +8,7 @@ OUT="${1:-$B/voi6-installed.png}"; DELAY="${2:-45}"
 QMP="$B/qmp-t.sock"; SER="$B/target-serial.log"
 rm -f "$QMP" "$SER" "$OUT"
 KVM=(); [ -e /dev/kvm ] && KVM=(-enable-kvm -cpu host)
-qemu-system-x86_64 "${KVM[@]}" -m 2048 -smp 2 \
+qemu-system-x86_64 "${KVM[@]}" -m "${VOI6_RAM:-2048}" -smp 2 \
     -drive "file=$B/target.img,format=raw,if=virtio" \
     -device virtio-gpu-pci \
     -netdev user,id=n0 -device virtio-net,netdev=n0 \

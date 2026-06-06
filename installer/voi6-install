@@ -34,7 +34,7 @@ COMPOSE="${VOI6_COMPOSE:-/usr/bin/mycel-compose}"
 # s6 supervision suite + the rest of the Voi6 base. base-system pulls runit; we
 # tear it out and install s6 instead (same swap as bootstrap.sh).
 S6_PKGS=(skalibs execline s6 s6-rc s6-linux-init)
-BASE_EXTRA=(elogind dbus dhcpcd eudev grub dialog)
+BASE_EXTRA=(elogind dbus dhcpcd eudev grub dialog fastfetch)
 
 BLUE='\033[0;34m'; GREEN='\033[0;32m'; RED='\033[0;31m'; NC='\033[0m'
 step() { echo -e "\n${BLUE}::${NC} $1"; }

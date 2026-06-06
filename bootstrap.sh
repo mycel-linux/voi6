@@ -39,6 +39,7 @@ PKGS=(
     dhcpcd                                     # networking
     cage foot dejavu-fonts-ttf                 # minimal Wayland session (compositor + term + font)
     dialog e2fsprogs dosfstools                # the installer (TUI + mkfs.ext4/vfat)
+    fastfetch                                  # branded login greeting
     linux                                      # kernel + (pulls dracut) initramfs
 )
 # Note: seatd is intentionally NOT installed — elogind provides seat management
@@ -138,8 +139,13 @@ rm -f "$ROOTFS/usr/share/dbus-1/system-services/org.freedesktop.login1.service"
 # (No PAM edits needed: Void's /etc/pam.d/system-login already ships
 #  `-session optional pam_elogind.so`, so logind sessions are created at login.)
 
-# Overlay: drop-in files copied verbatim into the rootfs (profile.d session entry).
+# Overlay: drop-in files copied verbatim into the rootfs (profile.d session entry,
+# fastfetch config + logo, /etc/skel).
 cp -aT "$HERE/overlay" "$ROOTFS"
+# The live `voi` user was created before the overlay landed; seed its bashrc from
+# skel so the fastfetch greeting shows on the live image too.
+install -Dm644 "$HERE/overlay/etc/skel/.bashrc" "$ROOTFS/home/voi/.bashrc"
+chown 1000:1000 "$ROOTFS/home/voi/.bashrc" 2>/dev/null || true
 ok "base config written"
 
 # ── 5. Weave the s6-rc tree with mycel-compose (the field test) ────────────────
