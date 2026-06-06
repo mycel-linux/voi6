@@ -1,6 +1,6 @@
 name = "voi6-autoinstall"
 kind = "oneshot"
-needs = ["dhcpcd"]
+needs = ["networkmanager"]
 bundles = ["default"]
 
 # Unattended/netinstall hook. The script no-ops unless the kernel cmdline carries

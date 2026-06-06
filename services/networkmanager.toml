@@ -1,0 +1,6 @@
+name = "networkmanager"
+kind = "longrun"
+needs = ["dbus", "udev-trigger"]
+bundles = ["default"]
+exec = "/usr/bin/NetworkManager --no-daemon"
+log = true

@@ -34,7 +34,7 @@ COMPOSE="${VOI6_COMPOSE:-/usr/bin/mycel-compose}"
 # s6 supervision suite + the rest of the Voi6 base. base-system pulls runit; we
 # tear it out and install s6 instead (same swap as bootstrap.sh).
 S6_PKGS=(skalibs execline s6 s6-rc s6-linux-init)
-BASE_EXTRA=(elogind dbus dhcpcd eudev grub dialog fastfetch)
+BASE_EXTRA=(elogind dbus NetworkManager eudev grub dialog fastfetch)
 
 BLUE='\033[0;34m'; GREEN='\033[0;32m'; RED='\033[0;31m'; NC='\033[0m'
 step() { echo -e "\n${BLUE}::${NC} $1"; }
@@ -221,7 +221,8 @@ install_de() {
     case "$DE" in
         none)   ok "DE: none (base only)"; return ;;
         cage)   pkgs=(cage foot dejavu-fonts-ttf) ;;        # the minimal Wayland session
-        plasma) pkgs=(plasma-desktop plasma-workspace kwin qt6-wayland mesa-dri dejavu-fonts-ttf) ;;
+        plasma) pkgs=(plasma-desktop plasma-workspace kwin qt6-wayland mesa-dri dejavu-fonts-ttf
+                       plasma-nm plasma-pa wireplumber pipewire-pulse) ;;
         gnome)  pkgs=(gnome-core mesa-dri dejavu-fonts-ttf) ;;
         *)      die "unknown DE '$DE' (none|cage|plasma|gnome)" ;;
     esac

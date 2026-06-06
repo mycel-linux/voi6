@@ -36,7 +36,7 @@ PKGS=(
     skalibs execline s6 s6-rc s6-linux-init   # the supervision suite
     dbus                                       # system bus
     elogind                                    # logind (login1): sessions/seats
-    dhcpcd                                     # networking
+    NetworkManager                             # networking (wifi + wired)
     cage foot dejavu-fonts-ttf                 # minimal Wayland session (compositor + term + font)
     dialog e2fsprogs dosfstools                # the installer (TUI + mkfs.ext4/vfat)
     fastfetch                                  # branded login greeting
