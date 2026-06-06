@@ -37,6 +37,7 @@ PKGS=(
     dbus                                       # system bus
     elogind                                    # logind (login1): sessions/seats
     NetworkManager                             # networking (wifi + wired)
+    attr                                       # getfattr/setfattr — needed by dmsquash-live overlayfs
     bluez                                      # bluetooth daemon
     cage foot dejavu-fonts-ttf                 # minimal Wayland session (compositor + term + font)
     dialog e2fsprogs dosfstools                # the installer (TUI + mkfs.ext4/vfat)

@@ -48,6 +48,7 @@ trap 'umount -R "$ROOTFS/dev" "$ROOTFS/proc" "$ROOTFS/sys" 2>/dev/null || true' 
 
 chroot "$ROOTFS" dracut \
     --add "dmsquash-live" \
+    --install "getfattr setfattr" \
     --no-hostonly \
     --force \
     "/boot/initramfs-live.img" "$KVER" \
@@ -81,12 +82,12 @@ set default=0
 set timeout=5
 
 menuentry "Voi6 Live" {
-    linux  /boot/vmlinuz root=live:CDLABEL=VOI6 rd.live.image quiet loglevel=4
+    linux  /boot/vmlinuz root=live:LABEL=VOI6 rd.live.image rd.live.dir=LiveOS rd.live.squashimg=rootfs.img quiet loglevel=4
     initrd /boot/initramfs.img
 }
 
 menuentry "Voi6 Live (verbose)" {
-    linux  /boot/vmlinuz root=live:CDLABEL=VOI6 rd.live.image loglevel=7
+    linux  /boot/vmlinuz root=live:LABEL=VOI6 rd.live.image rd.live.dir=LiveOS rd.live.squashimg=rootfs.img loglevel=7
     initrd /boot/initramfs.img
 }
 GRUBEOF
