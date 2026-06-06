@@ -222,7 +222,7 @@ install_de() {
         none)   ok "DE: none (base only)"; return ;;
         cage)   pkgs=(cage foot dejavu-fonts-ttf) ;;        # the minimal Wayland session
         plasma) pkgs=(plasma-desktop plasma-workspace kwin qt6-wayland mesa-dri dejavu-fonts-ttf
-                       plasma-nm plasma-pa wireplumber pipewire-pulse) ;;
+                       plasma-nm plasma-pa pipewire wireplumber) ;;
         gnome)  pkgs=(gnome-core mesa-dri dejavu-fonts-ttf) ;;
         *)      die "unknown DE '$DE' (none|cage|plasma|gnome)" ;;
     esac
