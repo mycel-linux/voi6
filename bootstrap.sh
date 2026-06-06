@@ -37,6 +37,7 @@ PKGS=(
     dbus                                       # system bus
     elogind                                    # logind (login1): sessions/seats
     NetworkManager                             # networking (wifi + wired)
+    bluez                                      # bluetooth daemon
     cage foot dejavu-fonts-ttf                 # minimal Wayland session (compositor + term + font)
     dialog e2fsprogs dosfstools                # the installer (TUI + mkfs.ext4/vfat)
     fastfetch                                  # branded login greeting
@@ -129,7 +130,7 @@ printf 'Voi6 \\r (\\l)\n\n' > "$ROOTFS/etc/issue"
 # seatd's group, and a normal login user.
 chroot "$ROOTFS" groupadd -rf seat 2>/dev/null || true
 if ! chroot "$ROOTFS" id voi >/dev/null 2>&1; then
-    chroot "$ROOTFS" useradd -m -G wheel,seat,video,input -s /bin/bash voi 2>/dev/null || true
+    chroot "$ROOTFS" useradd -m -G wheel,seat,video,input,bluetooth -s /bin/bash voi 2>/dev/null || true
 fi
 chroot "$ROOTFS" sh -c 'passwd -d root; passwd -d voi' 2>/dev/null || true
 

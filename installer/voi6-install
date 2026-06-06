@@ -34,7 +34,7 @@ COMPOSE="${VOI6_COMPOSE:-/usr/bin/mycel-compose}"
 # s6 supervision suite + the rest of the Voi6 base. base-system pulls runit; we
 # tear it out and install s6 instead (same swap as bootstrap.sh).
 S6_PKGS=(skalibs execline s6 s6-rc s6-linux-init)
-BASE_EXTRA=(elogind dbus NetworkManager eudev grub dialog fastfetch)
+BASE_EXTRA=(elogind dbus NetworkManager bluez noto-fonts eudev grub dialog fastfetch)
 
 BLUE='\033[0;34m'; GREEN='\033[0;32m'; RED='\033[0;31m'; NC='\033[0m'
 step() { echo -e "\n${BLUE}::${NC} $1"; }
@@ -181,7 +181,7 @@ EOF
 
     # Accounts.
     chroot "$TARGET" groupadd -rf seat 2>/dev/null || true
-    chroot "$TARGET" useradd -m -G wheel,video,input,audio,network \
+    chroot "$TARGET" useradd -m -G wheel,video,input,audio,network,bluetooth \
         -s /bin/bash "$USERNAME" 2>/dev/null || true
     echo "root:${ROOTPASS}"      | chroot "$TARGET" chpasswd
     echo "${USERNAME}:${USERPASS}" | chroot "$TARGET" chpasswd
@@ -222,7 +222,8 @@ install_de() {
         none)   ok "DE: none (base only)"; return ;;
         cage)   pkgs=(cage foot dejavu-fonts-ttf) ;;        # the minimal Wayland session
         plasma) pkgs=(plasma-desktop plasma-workspace kwin qt6-wayland mesa-dri dejavu-fonts-ttf
-                       plasma-nm plasma-pa pipewire wireplumber) ;;
+                       plasma-nm plasma-pa bluedevil pipewire wireplumber
+                       dolphin konsole) ;;
         gnome)  pkgs=(gnome-core mesa-dri dejavu-fonts-ttf) ;;
         *)      die "unknown DE '$DE' (none|cage|plasma|gnome)" ;;
     esac

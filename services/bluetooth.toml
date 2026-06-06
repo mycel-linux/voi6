@@ -1,0 +1,6 @@
+name = "bluetooth"
+kind = "longrun"
+needs = ["dbus"]
+bundles = ["default"]
+exec = "/usr/sbin/bluetoothd --nodetach"
+log = true
