@@ -23,10 +23,13 @@ case "$(tty 2>/dev/null)" in
                     >"${XDG_RUNTIME_DIR:-/tmp}/voi6-plasma.log" 2>&1
                 ;;
             gnome)
-                command -v gnome-session >/dev/null 2>&1 || return
+                command -v gnome-shell >/dev/null 2>&1 || return
                 export XDG_CURRENT_DESKTOP=GNOME
+                export XDG_SESSION_TYPE=wayland
                 export LIBGL_ALWAYS_SOFTWARE=1
-                exec dbus-run-session gnome-session
+                export GALLIUM_DRIVER=llvmpipe
+                exec dbus-run-session gnome-shell --wayland --display-server \
+                    >"${XDG_RUNTIME_DIR:-/tmp}/voi6-gnome.log" 2>&1
                 ;;
             cage|*)
                 command -v cage >/dev/null 2>&1 || return
