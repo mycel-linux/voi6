@@ -34,7 +34,7 @@ COMPOSE="${VOI6_COMPOSE:-/usr/bin/mycel-compose}"
 # s6 supervision suite + the rest of the Voi6 base. base-system pulls runit; we
 # tear it out and install s6 instead (same swap as bootstrap.sh).
 S6_PKGS=(skalibs execline s6 s6-rc s6-linux-init)
-BASE_EXTRA=(elogind dbus NetworkManager bluez noto-fonts eudev grub dialog fastfetch)
+BASE_EXTRA=(elogind dbus NetworkManager bluez eudev grub dialog fastfetch)
 
 BLUE='\033[0;34m'; GREEN='\033[0;32m'; RED='\033[0;31m'; NC='\033[0m'
 step() { echo -e "\n${BLUE}::${NC} $1"; }
@@ -264,7 +264,8 @@ do_install() {
 # ── TUI (dialog) ──────────────────────────────────────────────────────────────
 
 list_disks() {
-    lsblk -dno NAME,SIZE,MODEL 2>/dev/null | awk '$1!~/^(loop|sr|ram)/{print "/dev/"$1" "$2" "$3}'
+    lsblk -dno NAME,SIZE,MODEL 2>/dev/null | \
+        awk '$1!~/^(loop|sr|ram)/{printf "/dev/%s\t%s %s\n", $1, $2, $3}'
 }
 
 tui() {
@@ -278,8 +279,8 @@ tui() {
     [ "$choice" = quit ] && exit 0
 
     # Pick the target disk for both paths.
-    local menu=() d
-    while read -r d; do menu+=("$d" ""); done < <(list_disks)
+    local menu=() dev info
+    while IFS=$'\t' read -r dev info; do menu+=("$dev" "$info"); done < <(list_disks)
     DISK=$(dialog --stdout --title "Target disk" \
         --menu "ERASE which disk?" 14 60 6 "${menu[@]}") || exit 0
 
