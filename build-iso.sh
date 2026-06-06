@@ -66,6 +66,7 @@ mkdir -p "$ISODIR/LiveOS" "$ISODIR/boot/grub"
 
 mksquashfs "$ROOTFS" "$ISODIR/LiveOS/rootfs.img" \
     -comp zstd -Xcompression-level 9 \
+    -no-xattrs \
     -e "$ROOTFS/boot" \
     -noappend -quiet \
     || die "mksquashfs failed"
