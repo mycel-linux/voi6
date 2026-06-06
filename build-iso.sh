@@ -28,8 +28,9 @@ done
 
 # Re-exec inside a user+mount namespace so mksquashfs/chroot see uid 0.
 if [ -z "${VOI6_NS:-}" ]; then
+    SELF="$(readlink -f "${BASH_SOURCE[0]}")"
     exec env VOI6_NS=1 unshare --map-auto --map-root-user --mount --fork \
-        "${BASH_SOURCE[0]}" "$@"
+        "$SELF" "$@"
 fi
 
 # ── Locate kernel ─────────────────────────────────────────────────────────────
@@ -93,10 +94,7 @@ ok "grub.cfg written"
 
 # ── Hybrid ISO (BIOS + UEFI + El Torito) ─────────────────────────────────────
 step "building hybrid ISO..."
-grub-mkrescue -o "$OUT" "$ISODIR" -- \
-    -volid VOI6 \
-    -joliet -joliet-long \
-    2>/dev/null \
+grub-mkrescue -o "$OUT" "$ISODIR" -- -volid VOI6 2>/dev/null \
     || die "grub-mkrescue failed"
 
 ok "$(du -sh "$OUT" | cut -f1)  →  $OUT"
