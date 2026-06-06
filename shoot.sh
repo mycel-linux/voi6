@@ -12,7 +12,7 @@ rm -f "$QMP" "$SER" "$OUT"
 
 KVM=(); [ -e /dev/kvm ] && KVM=(-enable-kvm -cpu host)
 
-qemu-system-x86_64 "${KVM[@]}" -m 2048 -smp 2 \
+qemu-system-x86_64 "${KVM[@]}" -m "${VOI6_RAM:-2048}" -smp 2 \
     -kernel "$B/vmlinuz" -initrd "$B/initramfs.img" \
     -append "root=/dev/vda rw init=/sbin/init console=ttyS0 loglevel=4" \
     -drive "file=$B/voi6.img,format=raw,if=virtio" \

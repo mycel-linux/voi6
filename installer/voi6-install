@@ -213,19 +213,23 @@ install_bootloader() {
 }
 
 install_de() {
+    # Record the choice; the profile.d launcher reads /etc/voi6/session on tty1.
+    mkdir -p "$TARGET/etc/voi6"
+    echo "$DE" > "$TARGET/etc/voi6/session"
+
     local pkgs=()
     case "$DE" in
         none)   ok "DE: none (base only)"; return ;;
         cage)   pkgs=(cage foot dejavu-fonts-ttf) ;;        # the minimal Wayland session
-        plasma) pkgs=(plasma-desktop sddm) ;;
-        gnome)  pkgs=(gnome-core gdm) ;;
+        plasma) pkgs=(plasma-desktop plasma-workspace kwin qt6-wayland mesa-dri dejavu-fonts-ttf) ;;
+        gnome)  pkgs=(gnome-core mesa-dri dejavu-fonts-ttf) ;;
         *)      die "unknown DE '$DE' (none|cage|plasma|gnome)" ;;
     esac
     step "installing desktop: $DE (xbps the Void way)..."
     XBPS_ARCH=x86_64 xbps-install -Sy -R "$REPO" -r "$TARGET" "${pkgs[@]}" \
         || die "DE install failed"
-    # NOTE: full Plasma/GNOME session wiring (display-manager service + session
-    # graph) lands in the DE milestone; this fetches the packages for now.
+    # Autologin on tty1 -> profile.d launcher execs the session (no display
+    # manager). startplasma-wayland / gnome-session run under dbus-run-session.
     ok "DE installed ($DE)"
 }
 

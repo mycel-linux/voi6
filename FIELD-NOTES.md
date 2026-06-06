@@ -72,6 +72,25 @@ session works end to end.
 can't write `/dev/console` — `exec cage 2>/dev/console` failed *before* exec, so
 the compositor silently never started. Let compositor stderr stay on its tty.
 
+## Desktop bring-up findings (Plasma on Voi6)
+
+### D-01 — KDE components default to the xcb (X11) Qt plugin  🔴
+plasmashell/kded6 tried the `xcb` platform plugin and died ("no Qt platform
+plugin could be initialized") on a Wayland-only system. Fix: export
+`QT_QPA_PLATFORM=wayland` in the session launcher's plasma branch.
+
+### D-02 — /tmp/.X11-unix missing → Xwayland fails  🟡
+Same as MycelOS: without `/tmp/.X11-unix` (and .ICE-unix), kwin can't start
+Xwayland ("does not exist"). rc.init now creates them 1777 (the tmpfiles a
+systemd distro would auto-create).
+
+### D-03 — no GPU render node in QEMU  🟢
+kwin logs "Failed to open drm node" / "No render nodes" and falls back to
+software (kms_swrast); with `LIBGL_ALWAYS_SOFTWARE=1` + mesa-dri it composites
+fine (cursor + shell render). Slow first boot (QML cache build under llvmpipe).
+Session model: autologin tty1 → profile.d reads /etc/voi6/session → `exec
+dbus-run-session startplasma-wayland`. No display manager.
+
 ## Installer integration findings (voi6-install → /mnt + GRUB)
 
 The installer is bootstrap.sh retargeted to /mnt with partitioning + GRUB + users.

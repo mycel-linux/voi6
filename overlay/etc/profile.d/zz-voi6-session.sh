@@ -1,23 +1,38 @@
 # Voi6 session entry, sourced by login shells via /etc/profile.
 #
-# tty1  -> launch the Wayland compositor (cage) for the autologin user.
+# tty1  -> launch the chosen Wayland session for the autologin user.
 # ttyS0 -> print an elogind session diagnostic (the serial debug console).
-# Later, the tty1 branch reads the chosen DE and execs it (Plasma/GNOME), exactly
-# like MycelOS's zz-mycel-session.sh — cage is just the first compositor.
+# The DE is read from /etc/voi6/session (written by the installer); default cage.
 
 case "$(tty 2>/dev/null)" in
     /dev/tty1)
-        # Only from a real logind session, and not if a compositor is already up.
+        # Only from a real logind session, and not if a session is already up.
         [ -n "${WAYLAND_DISPLAY:-}" ] && return
         [ -z "${XDG_SESSION_ID:-}" ] && return
-        # No compositor installed? Stay at the shell instead of exec-fail looping.
-        command -v cage >/dev/null 2>&1 || return
         export XDG_SESSION_TYPE=wayland
-        export WLR_RENDERER=pixman           # no GL driver in the VM; software render
-        export WLR_NO_HARDWARE_CURSORS=1     # QEMU virtio-gpu has no HW cursor
-        # stderr stays on tty1 (the controlling terminal) so a failed compositor
-        # leaves its error on screen; on success cage takes over the display.
-        exec cage -- foot
+        de=$(cat /etc/voi6/session 2>/dev/null || echo cage)
+        case "$de" in
+            plasma)
+                command -v startplasma-wayland >/dev/null 2>&1 || return
+                export XDG_CURRENT_DESKTOP=KDE
+                export QT_QPA_PLATFORM=wayland   # KDE apps use Wayland, not xcb/X11
+                export LIBGL_ALWAYS_SOFTWARE=1   # llvmpipe — no GPU accel in the VM
+                # Log the session so failures are inspectable (writable by the user).
+                exec dbus-run-session startplasma-wayland >"$HOME/.voi6-plasma.log" 2>&1
+                ;;
+            gnome)
+                command -v gnome-session >/dev/null 2>&1 || return
+                export XDG_CURRENT_DESKTOP=GNOME
+                export LIBGL_ALWAYS_SOFTWARE=1
+                exec dbus-run-session gnome-session
+                ;;
+            cage|*)
+                command -v cage >/dev/null 2>&1 || return
+                export WLR_RENDERER=pixman           # no GL driver; software render
+                export WLR_NO_HARDWARE_CURSORS=1
+                exec cage -- foot
+                ;;
+        esac
         ;;
     /dev/ttyS0)
         echo "── Voi6 session check ───────────────────────────────"

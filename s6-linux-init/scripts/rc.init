@@ -6,6 +6,11 @@
 mount -a 2>/dev/null || true
 mkdir -p /run/user /run/lock
 
+# Sockets systemd-tmpfiles would normally create. Without /tmp/.X11-unix,
+# Xwayland can't make its socket and KDE/X apps fall over.
+mkdir -p /tmp/.X11-unix /tmp/.ICE-unix
+chmod 1777 /tmp/.X11-unix /tmp/.ICE-unix
+
 # cgroup v2 — REQUIRED by elogind (it crash-loops with "Cannot determine cgroup
 # we are running in" otherwise). Mount the unified hierarchy if it isn't already.
 if [ ! -e /sys/fs/cgroup/cgroup.controllers ]; then
