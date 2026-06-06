@@ -2,6 +2,11 @@
 # Voi6 stage 2 — run by s6-linux-init once s6-svscan is supervising the scandir.
 # Early mounts (/proc /sys /dev /run) are already done by s6-linux-init stage 1.
 
+# The bootloader mounts / read-only (grub passes `ro`, expecting init to remount
+# after fsck). Remount read-write so the system + user sessions can write. (The
+# live direct-kernel boot already passes `rw`, so this is a harmless no-op there.)
+mount -o remount,rw / 2>/dev/null || true
+
 # fstab mounts (tmpfs /tmp, /dev/shm, etc.) + runtime dirs
 mount -a 2>/dev/null || true
 mkdir -p /run/user /run/lock

@@ -109,6 +109,15 @@ mkfs.ext4 defaults enable `orphan_file` / `metadata_csum_seed`; disable them
 (`-O ^orphan_file,^metadata_csum_seed`) for the root fs so older GRUB readers stay
 happy. (Not the cause of I-05, but a real compat fix worth keeping.)
 
+### I-08 — installed root boots read-only (s6 must remount)  🔴
+GRUB passes `root=… ro` (the standard convention: init fsck's then remounts rw).
+The live image booted with `rw` on the cmdline, so it never showed — but the
+installed disk came up with **/ read-only**, and nothing remounted it. Plasma's
+session-log write failed → the session never launched (`Read-only file system`).
+Fix: rc.init does `mount -o remount,rw /` early. Also hardened the launcher to log
+to tmpfs (`$XDG_RUNTIME_DIR`) so a log write can never block the session. Verified:
+installed disk now boots GRUB→s6→elogind→Plasma fully.
+
 ### I-07 — installed payload ≠ live payload  🟡
 The live image bundles cage/foot/font (bootstrap PKGS); the *installer's* base set
 didn't, and `install_de cage` wrongly assumed "already in base" → installed system

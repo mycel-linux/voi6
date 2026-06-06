@@ -17,8 +17,10 @@ case "$(tty 2>/dev/null)" in
                 export XDG_CURRENT_DESKTOP=KDE
                 export QT_QPA_PLATFORM=wayland   # KDE apps use Wayland, not xcb/X11
                 export LIBGL_ALWAYS_SOFTWARE=1   # llvmpipe — no GPU accel in the VM
-                # Log the session so failures are inspectable (writable by the user).
-                exec dbus-run-session startplasma-wayland >"$HOME/.voi6-plasma.log" 2>&1
+                # Log to tmpfs (always writable, even if / were ro) so a log
+                # write can never block the session from starting.
+                exec dbus-run-session startplasma-wayland \
+                    >"${XDG_RUNTIME_DIR:-/tmp}/voi6-plasma.log" 2>&1
                 ;;
             gnome)
                 command -v gnome-session >/dev/null 2>&1 || return
