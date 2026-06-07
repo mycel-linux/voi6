@@ -34,7 +34,8 @@ COMPOSE="${VOI6_COMPOSE:-/usr/bin/mycel-compose}"
 # s6 supervision suite + the rest of the Voi6 base. base-system pulls runit; we
 # tear it out and install s6 instead (same swap as bootstrap.sh).
 S6_PKGS=(skalibs execline s6 s6-rc s6-linux-init)
-BASE_EXTRA=(elogind dbus NetworkManager bluez eudev grub dialog fastfetch)
+BASE_EXTRA=(elogind dbus NetworkManager dhcpcd kmod bluez eudev \
+    grub grub-x86_64-efi efibootmgr parted dialog fastfetch)
 
 BLUE='\033[0;34m'; GREEN='\033[0;32m'; RED='\033[0;31m'; NC='\033[0m'
 step() { echo -e "\n${BLUE}::${NC} $1"; }
@@ -58,6 +59,9 @@ partition_disk() {
 		,512M,C12A7328-F81F-11D2-BA4B-00A0C93EC93B
 		,,L
 		EOF
+        # sfdisk sets the GPT type GUID but some firmware only honours the explicit
+        # esp attribute bit — parted sets both, so do it here to match refracta/Devuan.
+        parted -s "$DISK" set 1 esp on 2>/dev/null || true
         ESP=$(partdev "$DISK" 1); ROOT=$(partdev "$DISK" 2)
     else
         # GPT for BIOS: 1M BIOS-boot (GRUB core) + rest root
@@ -90,6 +94,17 @@ format_and_mount() {
     ok "root on $ROOT ($FS)"
 }
 
+check_network() {
+    step "checking network (required for xbps)..."
+    local i=0
+    until ping -c1 -W2 repo-default.voidlinux.org >/dev/null 2>&1; do
+        i=$((i+1))
+        [ $i -ge 15 ] && die "no network after 30s — ensure ethernet is plugged in or run: nmcli device connect <iface>"
+        sleep 2
+    done
+    ok "network up"
+}
+
 install_base() {
     step "installing base system into $TARGET (network)..."
     mkdir -p "$TARGET/var/db/xbps/keys"
@@ -111,10 +126,13 @@ bind_pseudo() {
     mount --rbind /proc "$TARGET/proc"
     mount --rbind /sys  "$TARGET/sys"
     mount --rbind /dev  "$TARGET/dev"
+    # /run is required by efibootmgr (EFI variable socket) and grub-install.
+    mkdir -p "$TARGET/run"
+    mount --rbind /run  "$TARGET/run"
     cp -L /etc/resolv.conf "$TARGET/etc/resolv.conf" 2>/dev/null || true
 }
 unbind_pseudo() {
-    umount -lR "$TARGET/dev" "$TARGET/sys" "$TARGET/proc" 2>/dev/null || true
+    umount -lR "$TARGET/run" "$TARGET/dev" "$TARGET/sys" "$TARGET/proc" 2>/dev/null || true
 }
 
 weave_s6() {
@@ -182,13 +200,18 @@ EOF
     # Accounts.
     chroot "$TARGET" groupadd -rf seat 2>/dev/null || true
     chroot "$TARGET" useradd -m -G wheel,video,input,audio,network,bluetooth \
-        -s /bin/bash "$USERNAME" 2>/dev/null || true
+        -s /usr/bin/bash "$USERNAME" 2>/dev/null || true
     echo "root:${ROOTPASS}"      | chroot "$TARGET" chpasswd
     echo "${USERNAME}:${USERPASS}" | chroot "$TARGET" chpasswd
     # wheel -> sudo
     mkdir -p "$TARGET/etc/sudoers.d"
     echo '%wheel ALL=(ALL:ALL) ALL' > "$TARGET/etc/sudoers.d/10-wheel"
     chmod 0440 "$TARGET/etc/sudoers.d/10-wheel"
+    # cp -aT in the rootless build namespace can carry unexpected ownership/modes;
+    # fix up skel and the user's home so bash can source .bashrc without EACCES.
+    chmod 644 "$TARGET/etc/skel/.bashrc" 2>/dev/null || true
+    local uhome="$TARGET/home/$USERNAME"
+    [ -f "$uhome/.bashrc" ] && { chmod 644 "$uhome/.bashrc"; chown 1000:1000 "$uhome/.bashrc"; }
     ok "hostname=$HOSTNAME_ user=$USERNAME tz=$TIMEZONE locale=$LOCALE"
 }
 
@@ -243,6 +266,7 @@ do_install() {
     echo "  fs=$FS  host=$HOSTNAME_  user=$USERNAME  de=$DE  fw=$(firmware)"
     partition_disk
     format_and_mount
+    check_network
     install_base
     bind_pseudo
     trap unbind_pseudo EXIT

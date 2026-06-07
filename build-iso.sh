@@ -65,7 +65,7 @@ rm -rf "$ISODIR"
 mkdir -p "$ISODIR/LiveOS" "$ISODIR/boot/grub"
 
 mksquashfs "$ROOTFS" "$ISODIR/LiveOS/rootfs.img" \
-    -comp zstd -Xcompression-level 9 \
+    -comp gzip \
     -no-xattrs \
     -e "$ROOTFS/boot" \
     -noappend -quiet \
