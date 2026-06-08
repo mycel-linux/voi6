@@ -162,6 +162,15 @@ weave_s6() {
     # elogind: don't let dbus auto-activate a duplicate; drop the overlay in.
     rm -f "$TARGET/usr/share/dbus-1/system-services/org.freedesktop.login1.service"
     cp -aT "$ASSETS/overlay" "$TARGET"
+
+    # The getty-tty1 service hardcodes `--autologin voi`; patch it to the real
+    # username so the PAM session resolves and the user actually logs in.
+    find "$TARGET/etc/s6-rc/source" -name "run" \
+        -exec sed -i "s/--autologin voi /--autologin $USERNAME /g" {} \;
+    # Recompile after the patch so the running compiled db matches source.
+    rm -rf "$TARGET/etc/s6-rc/compiled"
+    chroot "$TARGET" s6-rc-compile /etc/s6-rc/compiled /etc/s6-rc/source \
+        || die "s6-rc-compile (post-patch) failed"
     ok "s6 woven; runit displaced"
 }
 
@@ -199,8 +208,12 @@ EOF
 
     # Accounts.
     chroot "$TARGET" groupadd -rf seat 2>/dev/null || true
-    chroot "$TARGET" useradd -m -G wheel,video,input,audio,network,bluetooth \
-        -s /usr/bin/bash "$USERNAME" 2>/dev/null || true
+    for g in wheel video input audio network bluetooth seat; do
+        chroot "$TARGET" groupadd -rf "$g" 2>/dev/null || true
+    done
+    chroot "$TARGET" useradd -m -G wheel,video,input,audio,network,bluetooth,seat \
+        -s /usr/bin/bash "$USERNAME" \
+        || die "useradd failed for $USERNAME"
     echo "root:${ROOTPASS}"      | chroot "$TARGET" chpasswd
     echo "${USERNAME}:${USERPASS}" | chroot "$TARGET" chpasswd
     # wheel -> sudo
@@ -225,6 +238,7 @@ install_bootloader() {
     if [ "$(firmware)" = uefi ]; then
         chroot "$TARGET" grub-install --target=x86_64-efi \
             --efi-directory=/boot/efi --bootloader-id=Voi6 --recheck \
+            --removable \
             || die "grub-install (efi) failed"
     else
         chroot "$TARGET" grub-install --target=i386-pc --recheck "$DISK" \

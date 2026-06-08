@@ -56,8 +56,13 @@ chroot "$ROOTFS" dracut \
 [ -f "$ROOTFS/boot/initramfs-live.img" ] || die "dracut produced no output"
 ok "live initramfs: $(du -sh "$ROOTFS/boot/initramfs-live.img" | cut -f1)"
 
-umount -R "$ROOTFS/dev" "$ROOTFS/proc" "$ROOTFS/sys" 2>/dev/null || true
+umount -lR "$ROOTFS/dev" "$ROOTFS/proc" "$ROOTFS/sys" 2>/dev/null || true
 trap - EXIT
+# Inside a user namespace, virtual filesystem files (device nodes in /dev, kernel
+# pseudo-files in /proc and /sys) cannot be deleted even with mapped-root.
+# Instead: skip rm-rf and use mksquashfs -wildcards to exclude their CONTENTS
+# while keeping the empty directory nodes in the squashfs (the kernel needs those
+# mount points to exist in the rootfs).
 
 # ── Squashfs the rootfs (exclude boot blobs — they're in the ISO directly) ───
 step "packing rootfs into squashfs..."
@@ -67,7 +72,11 @@ mkdir -p "$ISODIR/LiveOS" "$ISODIR/boot/grub"
 mksquashfs "$ROOTFS" "$ISODIR/LiveOS/rootfs.img" \
     -comp gzip \
     -no-xattrs \
-    -e "$ROOTFS/boot" \
+    -wildcards \
+    -e boot \
+    -e 'dev/*' \
+    -e 'proc/*' \
+    -e 'sys/*' \
     -noappend -quiet \
     || die "mksquashfs failed"
 ok "squashfs: $(du -sh "$ISODIR/LiveOS/rootfs.img" | cut -f1)"
